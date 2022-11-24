@@ -1,0 +1,11 @@
+{
+    "SomeConfig" :
+    {
+        "myval": 1
+    },
+    "SomeConfig2" :[
+        {
+            "myval2":"./somePath/file.txt"
+        }
+    ]
+}
