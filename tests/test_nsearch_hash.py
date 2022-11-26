@@ -30,10 +30,17 @@ class NeighborhoodSearchHash():
         self.max_num_neighbors = 100
 
         # nsearch fields new
-        self.grid_num_particles = ti.field(int,self.grid_size)
-        self.grid2particles = ti.field(int, (self.grid_size + (self.max_num_particles_per_cell,)))
+        self.grid_size_hash = 2 * self.num_particles
+        self.grid_num_particles_hash = ti.field(int,self.grid_size_hash)
+        self.grid2particles_hash = ti.field(int, ((self.grid_size_hash,) + (self.max_num_particles_per_cell,)))
         self.particle_num_neighbors = ti.field(int,self.num_particles)
         self.particle_neighbors = ti.field(int, shape=((self.num_particles,) + (self.max_num_neighbors,)))
+
+    
+    @ti.func
+    def cell2hash(self,cell):
+        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ 83492791)  % (self.grid_size_hash)
+        return int(res)
 
     @ti.func
     def get_cell(self,pos):
@@ -47,38 +54,41 @@ class NeighborhoodSearchHash():
     @ti.kernel
     def neighborhood_search(self):
         # clear neighbor lookup table
-        for I in ti.grouped(self.grid_num_particles):
-            self.grid_num_particles[I] = 0
+        for I in ti.grouped(self.grid_num_particles_hash):
+            self.grid_num_particles_hash[I] = 0
         for I in ti.grouped(self.particle_neighbors):
             self.particle_neighbors[I] = -1
 
         # update grid
         for p_i in self.positions:
             cell = self.get_cell(self.positions[p_i])
-            offs = ti.atomic_add(self.grid_num_particles[cell], 1)
-            self.grid2particles[cell, offs] = p_i
+            hash = self.cell2hash(cell)
+            offs = ti.atomic_add(self.grid_num_particles_hash[hash], 1)
+            self.grid2particles_hash[hash, offs] = p_i
         # find particle neighbors
         for p_i in self.positions:
             pos_i = self.positions[p_i]
             cell = self.get_cell(pos_i)
+            hash = self.cell2hash(cell)
             nb_i = 0
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2),(-1, 2)))):
                 cell_to_check = cell + offs
+                hash_to_check = self.cell2hash(cell_to_check)
                 if self.is_in_grid(cell_to_check):
-                    for j in range(self.grid_num_particles[cell_to_check]):
-                        p_j = self.grid2particles[cell_to_check, j]
+                    for j in range(self.grid_num_particles_hash[hash_to_check]):
+                        p_j = self.grid2particles_hash[hash_to_check, j]
                         if nb_i < self.max_num_neighbors and p_j != p_i and (
                                 pos_i - self.positions[p_j]).norm() < self.neighbor_radius:
                             self.particle_neighbors[p_i, nb_i] = p_j
                             nb_i += 1
             self.particle_num_neighbors[p_i] = nb_i
-    
+
 
 def test():
     pos = np.loadtxt('E:/Dev/SPH_Taichi/tests/test_data_input_nsearch.csv',dtype=float)
     search = NeighborhoodSearchHash(pos)
     search.neighborhood_search()
-    np.savetxt('test_data_actual_output_nsearch.csv', search.particle_neighbors.to_numpy(), "%d")
+    np.savetxt('test_data_actual_output_nsearch_hash.csv', search.particle_neighbors.to_numpy(), "%d")
 
 if __name__ == '__main__':
     test()
