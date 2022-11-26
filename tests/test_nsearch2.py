@@ -1,5 +1,5 @@
 '''
-采用pbf3d里面的邻域搜索。但是这有个问题：内存消耗太大。需要改写为hash网格
+这次换一下数据结构，为普通的taichi field
 '''
 import taichi as ti
 import numpy as np
@@ -9,16 +9,16 @@ sys.path.append(".")
 ti.init()
 
 @ti.data_oriented
-class NeighborhoodSearch():
+class NeighborhoodSearchHash():
     def __init__(self, pos) -> None:
         # common paramters
         dim = 3
-        num_particles = 100
+        self.num_particles = 100
         particle_radius = 3.0
         h = 1.1
 
         # read positions from the test data input
-        self.positions = ti.Vector.field(dim, float, num_particles)
+        self.positions = ti.Vector.field(dim, float, self.num_particles)
         self.positions.from_numpy(pos)
 
         # nsearch parameters
@@ -29,17 +29,17 @@ class NeighborhoodSearch():
         self.max_num_particles_per_cell = 100
         self.max_num_neighbors = 100
 
-        # nsearch fields
-        self.grid_num_particles = ti.field(int)
-        self.particle_num_neighbors = ti.field(int)
-        self.particle_neighbors = ti.field(int)
-        grid_snode = ti.root.dense(ti.ijk, self.grid_size) 
-        grid_snode.place(self.grid_num_particles)
+        # nsearch fields new
+        self.grid_num_particles = ti.field(int,self.grid_size)
+        self.particle_num_neighbors = ti.field(int,self.num_particles)
+        self.particle_neighbors = ti.field(int, shape=((self.num_particles,) + (self.max_num_neighbors,)))
         self.grid2particles = ti.field(int, (self.grid_size + (self.max_num_particles_per_cell,)))
-        nb_node = ti.root.dense(ti.i, num_particles)
-        nb_node.place(self.particle_num_neighbors)
-        nb_node.dense(ti.j, self.max_num_neighbors).place(self.particle_neighbors)
 
+
+    @ti.func
+    def get_cell_hash(self,cell):
+        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ 83492791)  % (2*self.num_particles)
+        return int(res)
 
     @ti.func
     def get_cell(self,pos):
@@ -82,12 +82,9 @@ class NeighborhoodSearch():
 
 def test():
     pos = np.loadtxt('E:/Dev/SPH_Taichi/tests/test_data_input_nsearch.csv',dtype=float)
-    search = NeighborhoodSearch(pos)
+    search = NeighborhoodSearchHash(pos)
     search.neighborhood_search()
-
     np.savetxt('test_data_actual_output_nsearch.csv', search.particle_neighbors.to_numpy(), "%d")
 
 if __name__ == '__main__':
     test()
-
-# np.savetxt('pos.csv', position.to_numpy().flatten(), "%.3f")
