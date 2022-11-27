@@ -39,7 +39,7 @@ class NeighborhoodSearchHash():
     
     @ti.func
     def cell2hash(self,cell):
-        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ (83492791*cell[2])))  % (self.grid_size_hash)
+        res =   ( (73856093 * cell[0]) ^ (19349663 * cell[1]) ^ (83492791*cell[2]))  % (self.grid_size_hash)
         return int(res)
 
     @ti.func
